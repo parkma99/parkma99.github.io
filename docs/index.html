@@ -57,7 +57,11 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
             <path id="pathSearch" fill-rule="evenodd"></path>
         </svg>
     </button></a>
-    
+    <a href="/about.html"><button class="btn btn-invisible circle" title="关于">
+        <svg class="octicon" width="16" height="16" >
+            <path id="关于" fill-rule="evenodd"></path>
+        </svg>
+    </button></a>
     <a href="/rss.xml" target="_blank"><button id="buttonRSS" class="btn btn-invisible circle" title="RSS">
         <svg class="octicon" width="16" height="16" >
             <path id="pathRSS" fill-rule="evenodd"></path>
@@ -73,18 +77,7 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
     <div id="content">
 <div style="margin-bottom: 16px;">write something</div>
 <nav class="SideNav border">
-<a class="SideNav-item d-flex flex-items-center flex-justify-between" href="post/guan-yu.html">
-    <div class="d-flex flex-items-center">
-        <svg class="SideNav-icon octicon" style="witdh:16px;height:16px"><path class="svgTop0" d=""></path>
-        </svg>
-        <span class="listTitle">关于</span>
-    </div>
-    <div class="listLabels">
-        <span class="Label" style="background-color:#006b75">1</span>
-        <span class="Label LabelName" style="background-color:#446516"><object><a style="color:#fff" href="/tag.html#about">about</a></object></span>
-        <span class="Label LabelTime" style="background-color:#A333D0">2023-12-01</span>
-    </div>
-</a>
+
 </nav>
 </div>
     <div id="footer">Copyright © <span id="year"></span><a href="parkma99.github.io"> Park Ma's Blog </a>
@@ -134,7 +127,7 @@ function utterancesTheme(theme){
     iframe.contentWindow.postMessage(message, 'https://utteranc.es');
 }
 
-console.log("\n %c Gmeek last %c https://github.com/Meekdai/Gmeek \n\n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
+console.log("\n %c Gmeek main %c https://github.com/Meekdai/Gmeek \n\n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
 </script>
 
 <script>
@@ -150,7 +143,7 @@ for(var i=0;i<iconPost.length;i++){
     iconPost[i].setAttribute("d",IconList["post"]);
 }
 
-
+document.getElementById("关于").setAttribute("d",value=IconList["about"]);
 </script>
 
 </html>
