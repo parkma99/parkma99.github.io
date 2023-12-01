@@ -13,6 +13,5 @@
     "yearColorList":["#bc4c00", "#0969da", "#1f883d", "#A333D0"],
     "i18n":"CN",
     "dayTheme":"light",
-    "nightTheme":"dark_colorblind",
-    "urlMode":"pinyin"
+    "nightTheme":"dark_colorblind"
 }
