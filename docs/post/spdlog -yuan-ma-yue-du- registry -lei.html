@@ -174,10 +174,20 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
     <span class="pl-k">bool</span> automatic_registration_ = <span class="pl-c1">true</span>;
     <span class="pl-c1">size_t</span> backtrace_n_messages_ = <span class="pl-c1">0</span>;
 };</pre></div>
-<ol>
-<li>无参数构造函数和析构函数都位于private，有参数的构造函数和赋值重载函数设置为delete，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register应该是实现了一个单例类</li>
-<li></li>
-</ol>
+<p>无参数构造函数和析构函数都位于<code class="notranslate">private</code>，有参数的构造函数和赋值重载函数设置为<code class="notranslate">delete</code>，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register是实现了一个单例类， <code class="notranslate">instance()</code> 每次返回同一个register 实例，spdlog 库通过register类来管理日志输出使用的全部资源</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">using</span> log_levels = std::unordered_map&lt;std::string, level::level_enum&gt;;
+std::mutex logger_map_mutex_, flusher_mutex_;
+std::recursive_mutex tp_mutex_;
+std::unordered_map&lt;std::string, std::shared_ptr&lt;logger&gt;&gt; loggers_;
+log_levels log_levels_;</pre></div>
+<p>register 类的管理的核心内容是 <code class="notranslate">loggers_</code> ,保存用户定义的 logger 名称和logger 实例的对应关系<br>
+logger_map_mutex_ 用于在更改 <code class="notranslate">loggers_</code> 进行上锁，避免多线程情况下的错误</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">SPDLOG_INLINE <span class="pl-k">void</span> <span class="pl-en">registry::register_logger</span>(std::shared_ptr&lt;logger&gt; new_logger)
+{
+    std::lock_guard&lt;std::mutex&gt; <span class="pl-c1">lock</span>(logger_map_mutex_);
+    <span class="pl-c1">register_logger_</span>(<span class="pl-c1">std::move</span>(new_logger));
+}</pre></div>
+<p>Todo: lock_guard 的用法</p>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>

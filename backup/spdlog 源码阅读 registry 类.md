@@ -119,5 +119,25 @@ private:
 };
 ```
 
-1. 无参数构造函数和析构函数都位于private，有参数的构造函数和赋值重载函数设置为delete，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register应该是实现了一个单例类
-2. 
+无参数构造函数和析构函数都位于`private`，有参数的构造函数和赋值重载函数设置为`delete`，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register是实现了一个单例类， `instance()` 每次返回同一个register 实例，spdlog 库通过register类来管理日志输出使用的全部资源
+ 
+```cpp
+using log_levels = std::unordered_map<std::string, level::level_enum>;
+std::mutex logger_map_mutex_, flusher_mutex_;
+std::recursive_mutex tp_mutex_;
+std::unordered_map<std::string, std::shared_ptr<logger>> loggers_;
+log_levels log_levels_;
+```
+
+register 类的管理的核心内容是 `loggers_` ,保存用户定义的 logger 名称和logger 实例的对应关系
+logger_map_mutex_ 用于在更改 `loggers_` 进行上锁，避免多线程情况下的错误
+
+```cpp
+SPDLOG_INLINE void registry::register_logger(std::shared_ptr<logger> new_logger)
+{
+    std::lock_guard<std::mutex> lock(logger_map_mutex_);
+    register_logger_(std::move(new_logger));
+}
+```
+Todo: lock_guard 的用法
+
