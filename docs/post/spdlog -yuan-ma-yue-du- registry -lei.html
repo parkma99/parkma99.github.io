@@ -83,6 +83,97 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
 }</pre></div>
 <p>通过<code class="notranslate">details::registry::instance()</code>函数就进入了今天要阅读了 <code class="notranslate">registry</code> 类</p>
 <h2><code class="notranslate">registry</code> 类的成员</h2>
+<p><code class="notranslate">registry</code> 类的定义在 <code class="notranslate">registry.h</code>， 实现定义在 <code class="notranslate">registry-inl.h</code> 下</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">class</span> <span class="pl-en">SPDLOG_API</span> registry
+{
+<span class="pl-k">public:</span>
+    <span class="pl-k">using</span> log_levels = std::unordered_map&lt;std::string, level::level_enum&gt;;
+    <span class="pl-en">registry</span>(<span class="pl-k">const</span> registry &amp;) = <span class="pl-k">delete</span>;
+    registry &amp;<span class="pl-k">operator</span>=(<span class="pl-k">const</span> registry &amp;) = <span class="pl-k">delete</span>;
+
+    <span class="pl-k">void</span> <span class="pl-en">register_logger</span>(std::shared_ptr&lt;logger&gt; new_logger);
+    <span class="pl-k">void</span> <span class="pl-en">initialize_logger</span>(std::shared_ptr&lt;logger&gt; new_logger);
+    std::shared_ptr&lt;logger&gt; <span class="pl-en">get</span>(<span class="pl-k">const</span> std::string &amp;logger_name);
+    std::shared_ptr&lt;logger&gt; <span class="pl-en">default_logger</span>();
+
+    <span class="pl-c"><span class="pl-c">//</span> Return raw ptr to the default logger.</span>
+    <span class="pl-c"><span class="pl-c">//</span> To be used directly by the spdlog default api (e.g. spdlog::info)</span>
+    <span class="pl-c"><span class="pl-c">//</span> This make the default API faster, but cannot be used concurrently with set_default_logger().</span>
+    <span class="pl-c"><span class="pl-c">//</span> e.g do not call set_default_logger() from one thread while calling spdlog::info() from another.</span>
+    logger *<span class="pl-en">get_default_raw</span>();
+
+    <span class="pl-c"><span class="pl-c">//</span> set default logger.</span>
+    <span class="pl-c"><span class="pl-c">//</span> default logger is stored in default_logger_ (for faster retrieval) and in the loggers_ map.</span>
+    <span class="pl-k">void</span> <span class="pl-en">set_default_logger</span>(std::shared_ptr&lt;logger&gt; new_default_logger);
+
+    <span class="pl-k">void</span> <span class="pl-en">set_tp</span>(std::shared_ptr&lt;thread_pool&gt; tp);
+
+    std::shared_ptr&lt;thread_pool&gt; <span class="pl-en">get_tp</span>();
+
+    <span class="pl-c"><span class="pl-c">//</span> Set global formatter. Each sink in each logger will get a clone of this object</span>
+    <span class="pl-k">void</span> <span class="pl-en">set_formatter</span>(std::unique_ptr&lt;formatter&gt; formatter);
+
+    <span class="pl-k">void</span> <span class="pl-en">enable_backtrace</span>(<span class="pl-c1">size_t</span> n_messages);
+
+    <span class="pl-k">void</span> <span class="pl-en">disable_backtrace</span>();
+
+    <span class="pl-k">void</span> <span class="pl-en">set_level</span>(level::level_enum log_level);
+
+    <span class="pl-k">void</span> <span class="pl-en">flush_on</span>(level::level_enum log_level);
+
+    <span class="pl-k">template</span>&lt;<span class="pl-k">typename</span> Rep, <span class="pl-k">typename</span> Period&gt;
+    <span class="pl-k">void</span> <span class="pl-en">flush_every</span>(std::chrono::duration&lt;Rep, Period&gt; interval)
+    {
+        std::lock_guard&lt;std::mutex&gt; <span class="pl-c1">lock</span>(flusher_mutex_);
+        <span class="pl-k">auto</span> clbk = [<span class="pl-c1">this</span>]() { <span class="pl-c1">this</span>-&gt;<span class="pl-c1">flush_all</span>(); };
+        periodic_flusher_ = details::make_unique&lt;periodic_worker&gt;(clbk, interval);
+    }
+
+    <span class="pl-k">void</span> <span class="pl-en">set_error_handler</span>(err_handler handler);
+
+    <span class="pl-k">void</span> <span class="pl-en">apply_all</span>(<span class="pl-k">const</span> std::function&lt;<span class="pl-k">void</span>(<span class="pl-k">const</span> std::shared_ptr&lt;logger&gt;)&gt; &amp;fun);
+
+    <span class="pl-k">void</span> <span class="pl-en">flush_all</span>();
+
+    <span class="pl-k">void</span> <span class="pl-en">drop</span>(<span class="pl-k">const</span> std::string &amp;logger_name);
+
+    <span class="pl-k">void</span> <span class="pl-en">drop_all</span>();
+
+    <span class="pl-c"><span class="pl-c">//</span> clean all resources and threads started by the registry</span>
+    <span class="pl-k">void</span> <span class="pl-en">shutdown</span>();
+
+    std::recursive_mutex &amp;<span class="pl-en">tp_mutex</span>();
+
+    <span class="pl-k">void</span> <span class="pl-en">set_automatic_registration</span>(<span class="pl-k">bool</span> automatic_registration);
+
+    <span class="pl-c"><span class="pl-c">//</span> set levels for all existing/future loggers. global_level can be null if should not set.</span>
+    <span class="pl-k">void</span> <span class="pl-en">set_levels</span>(log_levels levels, level::level_enum *global_level);
+
+    <span class="pl-k">static</span> registry &amp;<span class="pl-en">instance</span>();
+
+    <span class="pl-k">void</span> <span class="pl-en">apply_logger_env_levels</span>(std::shared_ptr&lt;logger&gt; new_logger);
+
+<span class="pl-k">private:</span>
+    <span class="pl-en">registry</span>();
+    <span class="pl-en">~registry</span>();
+
+    <span class="pl-k">void</span> <span class="pl-en">throw_if_exists_</span>(<span class="pl-k">const</span> std::string &amp;logger_name);
+    <span class="pl-k">void</span> <span class="pl-en">register_logger_</span>(std::shared_ptr&lt;logger&gt; new_logger);
+    <span class="pl-k">bool</span> <span class="pl-en">set_level_from_cfg_</span>(logger *logger);
+    std::mutex logger_map_mutex_, flusher_mutex_;
+    std::recursive_mutex tp_mutex_;
+    std::unordered_map&lt;std::string, std::shared_ptr&lt;logger&gt;&gt; loggers_;
+    log_levels log_levels_;
+    std::unique_ptr&lt;formatter&gt; formatter_;
+    spdlog::level::level_enum global_log_level_ = level::info;
+    level::level_enum flush_level_ = level::off;
+    err_handler err_handler_;
+    std::shared_ptr&lt;thread_pool&gt; tp_;
+    std::unique_ptr&lt;periodic_worker&gt; periodic_flusher_;
+    std::shared_ptr&lt;logger&gt; default_logger_;
+    <span class="pl-k">bool</span> automatic_registration_ = <span class="pl-c1">true</span>;
+    <span class="pl-c1">size_t</span> backtrace_n_messages_ = <span class="pl-c1">0</span>;
+};</pre></div>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>
