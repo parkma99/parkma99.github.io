@@ -174,6 +174,10 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
     <span class="pl-k">bool</span> automatic_registration_ = <span class="pl-c1">true</span>;
     <span class="pl-c1">size_t</span> backtrace_n_messages_ = <span class="pl-c1">0</span>;
 };</pre></div>
+<ol>
+<li>无参数构造函数和析构函数都位于private，有参数的构造函数和赋值重载函数设置为delete，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register应该是实现了一个单例类</li>
+<li></li>
+</ol>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>

@@ -118,3 +118,6 @@ private:
     size_t backtrace_n_messages_ = 0;
 };
 ```
+
+1. 无参数构造函数和析构函数都位于private，有参数的构造函数和赋值重载函数设置为delete，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register应该是实现了一个单例类
+2. 
