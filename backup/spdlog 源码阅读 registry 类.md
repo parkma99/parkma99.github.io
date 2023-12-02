@@ -1,4 +1,4 @@
-### 从` spdlog::info("Welcome to spdlog!");` 开始阅读
+## 从` spdlog::info("Welcome to spdlog!");` 开始阅读
 
 通过查找 ` spdlog::info` 函数定义，可以找到其定义在 `spdlog.h` 下
 
@@ -33,101 +33,26 @@ public:
     using log_levels = std::unordered_map<std::string, level::level_enum>;
     registry(const registry &) = delete;
     registry &operator=(const registry &) = delete;
-
-    void register_logger(std::shared_ptr<logger> new_logger);
-    void initialize_logger(std::shared_ptr<logger> new_logger);
-    std::shared_ptr<logger> get(const std::string &logger_name);
-    std::shared_ptr<logger> default_logger();
-
-    // Return raw ptr to the default logger.
-    // To be used directly by the spdlog default api (e.g. spdlog::info)
-    // This make the default API faster, but cannot be used concurrently with set_default_logger().
-    // e.g do not call set_default_logger() from one thread while calling spdlog::info() from another.
-    logger *get_default_raw();
-
-    // set default logger.
-    // default logger is stored in default_logger_ (for faster retrieval) and in the loggers_ map.
-    void set_default_logger(std::shared_ptr<logger> new_default_logger);
-
-    void set_tp(std::shared_ptr<thread_pool> tp);
-
-    std::shared_ptr<thread_pool> get_tp();
-
-    // Set global formatter. Each sink in each logger will get a clone of this object
-    void set_formatter(std::unique_ptr<formatter> formatter);
-
-    void enable_backtrace(size_t n_messages);
-
-    void disable_backtrace();
-
-    void set_level(level::level_enum log_level);
-
-    void flush_on(level::level_enum log_level);
-
-    template<typename Rep, typename Period>
-    void flush_every(std::chrono::duration<Rep, Period> interval)
-    {
-        std::lock_guard<std::mutex> lock(flusher_mutex_);
-        auto clbk = [this]() { this->flush_all(); };
-        periodic_flusher_ = details::make_unique<periodic_worker>(clbk, interval);
-    }
-
-    void set_error_handler(err_handler handler);
-
-    void apply_all(const std::function<void(const std::shared_ptr<logger>)> &fun);
-
-    void flush_all();
-
-    void drop(const std::string &logger_name);
-
-    void drop_all();
-
-    // clean all resources and threads started by the registry
-    void shutdown();
-
-    std::recursive_mutex &tp_mutex();
-
-    void set_automatic_registration(bool automatic_registration);
-
-    // set levels for all existing/future loggers. global_level can be null if should not set.
-    void set_levels(log_levels levels, level::level_enum *global_level);
-
     static registry &instance();
-
-    void apply_logger_env_levels(std::shared_ptr<logger> new_logger);
-
 private:
     registry();
     ~registry();
-
-    void throw_if_exists_(const std::string &logger_name);
-    void register_logger_(std::shared_ptr<logger> new_logger);
-    bool set_level_from_cfg_(logger *logger);
-    std::mutex logger_map_mutex_, flusher_mutex_;
-    std::recursive_mutex tp_mutex_;
-    std::unordered_map<std::string, std::shared_ptr<logger>> loggers_;
-    log_levels log_levels_;
-    std::unique_ptr<formatter> formatter_;
-    spdlog::level::level_enum global_log_level_ = level::info;
-    level::level_enum flush_level_ = level::off;
-    err_handler err_handler_;
-    std::shared_ptr<thread_pool> tp_;
-    std::unique_ptr<periodic_worker> periodic_flusher_;
-    std::shared_ptr<logger> default_logger_;
-    bool automatic_registration_ = true;
-    size_t backtrace_n_messages_ = 0;
 };
 ```
-
+### 构造函数与析构函数
+```cpp
+std::shared_ptr<logger> default_logger_; // 单例 
+```
 无参数构造函数和析构函数都位于`private`，有参数的构造函数和赋值重载函数设置为`delete`，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register是实现了一个单例类， `instance()` 每次返回同一个register 实例，spdlog 库通过register类来管理日志输出使用的全部资源
  
 ```cpp
 using log_levels = std::unordered_map<std::string, level::level_enum>;
 std::mutex logger_map_mutex_, flusher_mutex_;
-std::recursive_mutex tp_mutex_;
 std::unordered_map<std::string, std::shared_ptr<logger>> loggers_;
 log_levels log_levels_;
 ```
+
+### loggers_ 成员与线程安全
 
 register 类的管理的核心内容是 `loggers_` ,保存用户定义的 logger 名称和logger 实例的对应关系
 logger_map_mutex_ 用于在更改 `loggers_` 进行上锁，避免多线程情况下的错误
@@ -139,5 +64,112 @@ SPDLOG_INLINE void registry::register_logger(std::shared_ptr<logger> new_logger)
     register_logger_(std::move(new_logger));
 }
 ```
-Todo: lock_guard 的用法
+Todo: `lock_guard` `mutex` 的用法
+
+### 线程池与线程安全
+
+```cpp
+std::recursive_mutex tp_mutex_;
+std::shared_ptr<thread_pool> tp_;
+```
+ 全局的线程池，以及全局的线程池的递归锁
+
+Todo: `recursive_mutex` 的用法
+
+spdlog 的线程池是自己定义的，下面是具体的定义
+
+```cpp
+class SPDLOG_API thread_pool
+{
+public:
+    using item_type = async_msg;
+    using q_type = details::mpmc_blocking_queue<item_type>;
+
+    thread_pool(size_t q_max_items, size_t threads_n, std::function<void()> on_thread_start, std::function<void()> on_thread_stop);
+    thread_pool(size_t q_max_items, size_t threads_n, std::function<void()> on_thread_start);
+    thread_pool(size_t q_max_items, size_t threads_n);
+
+    // message all threads to terminate gracefully and join them
+    ~thread_pool();
+
+    thread_pool(const thread_pool &) = delete;
+    thread_pool &operator=(thread_pool &&) = delete;
+
+    void post_log(async_logger_ptr &&worker_ptr, const details::log_msg &msg, async_overflow_policy overflow_policy);
+    void post_flush(async_logger_ptr &&worker_ptr, async_overflow_policy overflow_policy);
+    size_t overrun_counter();
+    void reset_overrun_counter();
+    size_t queue_size();
+
+private:
+    q_type q_;
+
+    std::vector<std::thread> threads_;
+
+    void post_async_msg_(async_msg &&new_msg, async_overflow_policy overflow_policy);
+    void worker_loop_();
+
+    // process next message in the queue
+    // return true if this thread should still be active (while no terminate msg
+    // was received)
+    bool process_next_msg_();
+};
+```
+后续在具体阅读其代码
+
+全局的线程池对象 `tp_` 用在创建async_logger
+```cpp
+static std::shared_ptr<async_logger> create(std::string logger_name, SinkArgs &&...args)
+    {
+        auto &registry_inst = details::registry::instance();
+
+        // create global thread pool if not already exists..
+
+        auto &mutex = registry_inst.tp_mutex();
+        std::lock_guard<std::recursive_mutex> tp_lock(mutex);
+        auto tp = registry_inst.get_tp();
+        if (tp == nullptr)
+        {
+            tp = std::make_shared<details::thread_pool>(details::default_async_q_size, 1U);
+            registry_inst.set_tp(tp);
+        }
+
+        auto sink = std::make_shared<Sink>(std::forward<SinkArgs>(args)...);
+        auto new_logger = std::make_shared<async_logger>(std::move(logger_name), std::move(sink), std::move(tp), OverflowPolicy);
+        registry_inst.initialize_logger(new_logger);
+        return new_logger;
+    }
+```
+从上述代码可以看出全局线程池不是由register类创建的，而是在创建async_logger时无法获得到全局的线程池时创建的
+
+### formatter_ 成员
+
+``` cpp
+SPDLOG_INLINE registry::registry()
+    : formatter_(new pattern_formatter()){}
+SPDLOG_INLINE void registry::set_formatter(std::unique_ptr<formatter> formatter)
+{
+    std::lock_guard<std::mutex> lock(logger_map_mutex_);
+    formatter_ = std::move(formatter);
+    for (auto &l : loggers_)
+    {
+        l.second->set_formatter(formatter_->clone());
+    }
+}
+```
+formatter_ 成员默认是 pattern_formatter， 同时提供了更换 formatter 的接口，register管理的logger使用同一个formatter_。
+
+formatter_ 是一个基类，定义如下
+```cpp
+class formatter
+{
+public:
+    virtual ~formatter() = default;
+    virtual void format(const details::log_msg &msg, memory_buf_t &dest) = 0;
+    virtual std::unique_ptr<formatter> clone() const = 0;
+};
+```
+用于提供一种格式化的方法
+
+
 

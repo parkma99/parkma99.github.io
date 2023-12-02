@@ -68,7 +68,7 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
 </div>
     <div id="content">
 <div class="markdown-body" id="postBody">
-<h3>从<code class="notranslate"> spdlog::info("Welcome to spdlog!");</code> 开始阅读</h3>
+<h2>从<code class="notranslate"> spdlog::info("Welcome to spdlog!");</code> 开始阅读</h2>
 <p>通过查找 <code class="notranslate"> spdlog::info</code> 函数定义，可以找到其定义在 <code class="notranslate">spdlog.h</code> 下</p>
 <div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">template</span>&lt;<span class="pl-k">typename</span>... Args&gt;
 <span class="pl-k">inline</span> <span class="pl-k">void</span> <span class="pl-en">info</span>(<span class="pl-c1">format_string_t</span>&lt;Args...&gt; fmt, Args &amp;&amp;...args)
@@ -90,96 +90,19 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
     <span class="pl-k">using</span> log_levels = std::unordered_map&lt;std::string, level::level_enum&gt;;
     <span class="pl-en">registry</span>(<span class="pl-k">const</span> registry &amp;) = <span class="pl-k">delete</span>;
     registry &amp;<span class="pl-k">operator</span>=(<span class="pl-k">const</span> registry &amp;) = <span class="pl-k">delete</span>;
-
-    <span class="pl-k">void</span> <span class="pl-en">register_logger</span>(std::shared_ptr&lt;logger&gt; new_logger);
-    <span class="pl-k">void</span> <span class="pl-en">initialize_logger</span>(std::shared_ptr&lt;logger&gt; new_logger);
-    std::shared_ptr&lt;logger&gt; <span class="pl-en">get</span>(<span class="pl-k">const</span> std::string &amp;logger_name);
-    std::shared_ptr&lt;logger&gt; <span class="pl-en">default_logger</span>();
-
-    <span class="pl-c"><span class="pl-c">//</span> Return raw ptr to the default logger.</span>
-    <span class="pl-c"><span class="pl-c">//</span> To be used directly by the spdlog default api (e.g. spdlog::info)</span>
-    <span class="pl-c"><span class="pl-c">//</span> This make the default API faster, but cannot be used concurrently with set_default_logger().</span>
-    <span class="pl-c"><span class="pl-c">//</span> e.g do not call set_default_logger() from one thread while calling spdlog::info() from another.</span>
-    logger *<span class="pl-en">get_default_raw</span>();
-
-    <span class="pl-c"><span class="pl-c">//</span> set default logger.</span>
-    <span class="pl-c"><span class="pl-c">//</span> default logger is stored in default_logger_ (for faster retrieval) and in the loggers_ map.</span>
-    <span class="pl-k">void</span> <span class="pl-en">set_default_logger</span>(std::shared_ptr&lt;logger&gt; new_default_logger);
-
-    <span class="pl-k">void</span> <span class="pl-en">set_tp</span>(std::shared_ptr&lt;thread_pool&gt; tp);
-
-    std::shared_ptr&lt;thread_pool&gt; <span class="pl-en">get_tp</span>();
-
-    <span class="pl-c"><span class="pl-c">//</span> Set global formatter. Each sink in each logger will get a clone of this object</span>
-    <span class="pl-k">void</span> <span class="pl-en">set_formatter</span>(std::unique_ptr&lt;formatter&gt; formatter);
-
-    <span class="pl-k">void</span> <span class="pl-en">enable_backtrace</span>(<span class="pl-c1">size_t</span> n_messages);
-
-    <span class="pl-k">void</span> <span class="pl-en">disable_backtrace</span>();
-
-    <span class="pl-k">void</span> <span class="pl-en">set_level</span>(level::level_enum log_level);
-
-    <span class="pl-k">void</span> <span class="pl-en">flush_on</span>(level::level_enum log_level);
-
-    <span class="pl-k">template</span>&lt;<span class="pl-k">typename</span> Rep, <span class="pl-k">typename</span> Period&gt;
-    <span class="pl-k">void</span> <span class="pl-en">flush_every</span>(std::chrono::duration&lt;Rep, Period&gt; interval)
-    {
-        std::lock_guard&lt;std::mutex&gt; <span class="pl-c1">lock</span>(flusher_mutex_);
-        <span class="pl-k">auto</span> clbk = [<span class="pl-c1">this</span>]() { <span class="pl-c1">this</span>-&gt;<span class="pl-c1">flush_all</span>(); };
-        periodic_flusher_ = details::make_unique&lt;periodic_worker&gt;(clbk, interval);
-    }
-
-    <span class="pl-k">void</span> <span class="pl-en">set_error_handler</span>(err_handler handler);
-
-    <span class="pl-k">void</span> <span class="pl-en">apply_all</span>(<span class="pl-k">const</span> std::function&lt;<span class="pl-k">void</span>(<span class="pl-k">const</span> std::shared_ptr&lt;logger&gt;)&gt; &amp;fun);
-
-    <span class="pl-k">void</span> <span class="pl-en">flush_all</span>();
-
-    <span class="pl-k">void</span> <span class="pl-en">drop</span>(<span class="pl-k">const</span> std::string &amp;logger_name);
-
-    <span class="pl-k">void</span> <span class="pl-en">drop_all</span>();
-
-    <span class="pl-c"><span class="pl-c">//</span> clean all resources and threads started by the registry</span>
-    <span class="pl-k">void</span> <span class="pl-en">shutdown</span>();
-
-    std::recursive_mutex &amp;<span class="pl-en">tp_mutex</span>();
-
-    <span class="pl-k">void</span> <span class="pl-en">set_automatic_registration</span>(<span class="pl-k">bool</span> automatic_registration);
-
-    <span class="pl-c"><span class="pl-c">//</span> set levels for all existing/future loggers. global_level can be null if should not set.</span>
-    <span class="pl-k">void</span> <span class="pl-en">set_levels</span>(log_levels levels, level::level_enum *global_level);
-
     <span class="pl-k">static</span> registry &amp;<span class="pl-en">instance</span>();
-
-    <span class="pl-k">void</span> <span class="pl-en">apply_logger_env_levels</span>(std::shared_ptr&lt;logger&gt; new_logger);
-
 <span class="pl-k">private:</span>
     <span class="pl-en">registry</span>();
     <span class="pl-en">~registry</span>();
-
-    <span class="pl-k">void</span> <span class="pl-en">throw_if_exists_</span>(<span class="pl-k">const</span> std::string &amp;logger_name);
-    <span class="pl-k">void</span> <span class="pl-en">register_logger_</span>(std::shared_ptr&lt;logger&gt; new_logger);
-    <span class="pl-k">bool</span> <span class="pl-en">set_level_from_cfg_</span>(logger *logger);
-    std::mutex logger_map_mutex_, flusher_mutex_;
-    std::recursive_mutex tp_mutex_;
-    std::unordered_map&lt;std::string, std::shared_ptr&lt;logger&gt;&gt; loggers_;
-    log_levels log_levels_;
-    std::unique_ptr&lt;formatter&gt; formatter_;
-    spdlog::level::level_enum global_log_level_ = level::info;
-    level::level_enum flush_level_ = level::off;
-    err_handler err_handler_;
-    std::shared_ptr&lt;thread_pool&gt; tp_;
-    std::unique_ptr&lt;periodic_worker&gt; periodic_flusher_;
-    std::shared_ptr&lt;logger&gt; default_logger_;
-    <span class="pl-k">bool</span> automatic_registration_ = <span class="pl-c1">true</span>;
-    <span class="pl-c1">size_t</span> backtrace_n_messages_ = <span class="pl-c1">0</span>;
 };</pre></div>
+<h3>构造函数与析构函数</h3>
+<div class="highlight highlight-source-c++"><pre class="notranslate">std::shared_ptr&lt;logger&gt; default_logger_; <span class="pl-c"><span class="pl-c">//</span> 单例 </span></pre></div>
 <p>无参数构造函数和析构函数都位于<code class="notranslate">private</code>，有参数的构造函数和赋值重载函数设置为<code class="notranslate">delete</code>，说明不允许用户创建 register 类的实例，register类的实例由spdlog库进行管理，register是实现了一个单例类， <code class="notranslate">instance()</code> 每次返回同一个register 实例，spdlog 库通过register类来管理日志输出使用的全部资源</p>
 <div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">using</span> log_levels = std::unordered_map&lt;std::string, level::level_enum&gt;;
 std::mutex logger_map_mutex_, flusher_mutex_;
-std::recursive_mutex tp_mutex_;
 std::unordered_map&lt;std::string, std::shared_ptr&lt;logger&gt;&gt; loggers_;
 log_levels log_levels_;</pre></div>
+<h3>loggers_ 成员与线程安全</h3>
 <p>register 类的管理的核心内容是 <code class="notranslate">loggers_</code> ,保存用户定义的 logger 名称和logger 实例的对应关系<br>
 logger_map_mutex_ 用于在更改 <code class="notranslate">loggers_</code> 进行上锁，避免多线程情况下的错误</p>
 <div class="highlight highlight-source-c++"><pre class="notranslate">SPDLOG_INLINE <span class="pl-k">void</span> <span class="pl-en">registry::register_logger</span>(std::shared_ptr&lt;logger&gt; new_logger)
@@ -187,7 +110,93 @@ logger_map_mutex_ 用于在更改 <code class="notranslate">loggers_</code> 进�
     std::lock_guard&lt;std::mutex&gt; <span class="pl-c1">lock</span>(logger_map_mutex_);
     <span class="pl-c1">register_logger_</span>(<span class="pl-c1">std::move</span>(new_logger));
 }</pre></div>
-<p>Todo: lock_guard 的用法</p>
+<p>Todo: <code class="notranslate">lock_guard</code> <code class="notranslate">mutex</code> 的用法</p>
+<h3>线程池与线程安全</h3>
+<div class="highlight highlight-source-c++"><pre class="notranslate">std::recursive_mutex tp_mutex_;
+std::shared_ptr&lt;thread_pool&gt; tp_;</pre></div>
+<p>全局的线程池，以及全局的线程池的递归锁</p>
+<p>Todo: <code class="notranslate">recursive_mutex</code> 的用法</p>
+<p>spdlog 的线程池是自己定义的，下面是具体的定义</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">class</span> <span class="pl-en">SPDLOG_API</span> thread_pool
+{
+<span class="pl-k">public:</span>
+    <span class="pl-k">using</span> item_type = async_msg;
+    <span class="pl-k">using</span> q_type = details::mpmc_blocking_queue&lt;item_type&gt;;
+
+    <span class="pl-en">thread_pool</span>(<span class="pl-c1">size_t</span> q_max_items, <span class="pl-c1">size_t</span> threads_n, std::function&lt;<span class="pl-k">void</span>()&gt; on_thread_start, std::function&lt;<span class="pl-k">void</span>()&gt; on_thread_stop);
+    <span class="pl-en">thread_pool</span>(<span class="pl-c1">size_t</span> q_max_items, <span class="pl-c1">size_t</span> threads_n, std::function&lt;<span class="pl-k">void</span>()&gt; on_thread_start);
+    <span class="pl-en">thread_pool</span>(<span class="pl-c1">size_t</span> q_max_items, <span class="pl-c1">size_t</span> threads_n);
+
+    <span class="pl-c"><span class="pl-c">//</span> message all threads to terminate gracefully and join them</span>
+    <span class="pl-en">~thread_pool</span>();
+
+    <span class="pl-en">thread_pool</span>(<span class="pl-k">const</span> thread_pool &amp;) = <span class="pl-k">delete</span>;
+    thread_pool &amp;<span class="pl-k">operator</span>=(thread_pool &amp;&amp;) = <span class="pl-k">delete</span>;
+
+    <span class="pl-k">void</span> <span class="pl-en">post_log</span>(async_logger_ptr &amp;&amp;worker_ptr, <span class="pl-k">const</span> details::log_msg &amp;msg, async_overflow_policy overflow_policy);
+    <span class="pl-k">void</span> <span class="pl-en">post_flush</span>(async_logger_ptr &amp;&amp;worker_ptr, async_overflow_policy overflow_policy);
+    <span class="pl-c1">size_t</span> <span class="pl-en">overrun_counter</span>();
+    <span class="pl-k">void</span> <span class="pl-en">reset_overrun_counter</span>();
+    <span class="pl-c1">size_t</span> <span class="pl-en">queue_size</span>();
+
+<span class="pl-k">private:</span>
+    q_type q_;
+
+    std::vector&lt;std::thread&gt; threads_;
+
+    <span class="pl-k">void</span> <span class="pl-en">post_async_msg_</span>(async_msg &amp;&amp;new_msg, async_overflow_policy overflow_policy);
+    <span class="pl-k">void</span> <span class="pl-en">worker_loop_</span>();
+
+    <span class="pl-c"><span class="pl-c">//</span> process next message in the queue</span>
+    <span class="pl-c"><span class="pl-c">//</span> return true if this thread should still be active (while no terminate msg</span>
+    <span class="pl-c"><span class="pl-c">//</span> was received)</span>
+    <span class="pl-k">bool</span> <span class="pl-en">process_next_msg_</span>();
+};</pre></div>
+<p>后续在具体阅读其代码</p>
+<p>全局的线程池对象 <code class="notranslate">tp_</code> 用在创建async_logger</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">static</span> std::shared_ptr&lt;async_logger&gt; <span class="pl-en">create</span>(std::string logger_name, SinkArgs &amp;&amp;...args)
+    {
+        <span class="pl-k">auto</span> &amp;registry_inst = <span class="pl-c1">details::registry::instance</span>();
+
+        <span class="pl-c"><span class="pl-c">//</span> create global thread pool if not already exists..</span>
+
+        <span class="pl-k">auto</span> &amp;mutex = registry_inst.<span class="pl-c1">tp_mutex</span>();
+        std::lock_guard&lt;std::recursive_mutex&gt; <span class="pl-c1">tp_lock</span>(mutex);
+        <span class="pl-k">auto</span> tp = registry_inst.<span class="pl-c1">get_tp</span>();
+        <span class="pl-k">if</span> (tp == <span class="pl-c1">nullptr</span>)
+        {
+            tp = std::make_shared&lt;details::thread_pool&gt;(details::default_async_q_size, <span class="pl-c1">1U</span>);
+            registry_inst.<span class="pl-c1">set_tp</span>(tp);
+        }
+
+        <span class="pl-k">auto</span> sink = std::make_shared&lt;Sink&gt;(std::forward&lt;SinkArgs&gt;(args)...);
+        <span class="pl-k">auto</span> new_logger = std::make_shared&lt;async_logger&gt;(<span class="pl-c1">std::move</span>(logger_name), <span class="pl-c1">std::move</span>(sink), <span class="pl-c1">std::move</span>(tp), OverflowPolicy);
+        registry_inst.<span class="pl-c1">initialize_logger</span>(new_logger);
+        <span class="pl-k">return</span> new_logger;
+    }</pre></div>
+<p>从上述代码可以看出全局线程池不是由register类创建的，而是在创建async_logger时无法获得到全局的线程池时创建的</p>
+<h3>formatter_ 成员</h3>
+<div class="highlight highlight-source-c++"><pre class="notranslate">SPDLOG_INLINE <span class="pl-en">registry::registry</span>()
+    : formatter_(<span class="pl-k">new</span> pattern_formatter()){}
+SPDLOG_INLINE <span class="pl-k">void</span> <span class="pl-en">registry::set_formatter</span>(std::unique_ptr&lt;formatter&gt; formatter)
+{
+    std::lock_guard&lt;std::mutex&gt; <span class="pl-c1">lock</span>(logger_map_mutex_);
+    formatter_ = <span class="pl-c1">std::move</span>(formatter);
+    <span class="pl-k">for</span> (<span class="pl-k">auto</span> &amp;l : loggers_)
+    {
+        l.<span class="pl-smi">second</span>-&gt;<span class="pl-c1">set_formatter</span>(formatter_-&gt;<span class="pl-c1">clone</span>());
+    }
+}</pre></div>
+<p>formatter_ 成员默认是 pattern_formatter， 同时提供了更换 formatter 的接口，register管理的logger使用同一个formatter_。</p>
+<p>formatter_ 是一个基类，定义如下</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">class</span> <span class="pl-en">formatter</span>
+{
+<span class="pl-k">public:</span>
+    <span class="pl-k">virtual</span> <span class="pl-en">~formatter</span>() = <span class="pl-k">default</span>;
+    <span class="pl-k">virtual</span> <span class="pl-k">void</span> <span class="pl-en">format</span>(<span class="pl-k">const</span> details::log_msg &amp;msg, <span class="pl-c1">memory_buf_t</span> &amp;dest) = 0;
+    <span class="pl-k">virtual</span> std::unique_ptr&lt;formatter&gt; <span class="pl-en">clone</span>() <span class="pl-k">const</span> = 0;
+};</pre></div>
+<p>用于提供一种格式化的方法</p>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>
