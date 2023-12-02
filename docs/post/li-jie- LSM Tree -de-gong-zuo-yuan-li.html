@@ -92,7 +92,17 @@ LSM tree 在工作过程中尽可能避免随机读写，充分发挥了磁盘�
 <h2>压实（Compaction）</h2>
 <p>随着数据的不断积累，SSTable 将会产生越来越多的 segment，导致查询时扫描文件的 IO 次数增多，效率降低，因此需要有一种机制来控制 segment 的数量。对此，LSM tree 会定期执行文件合并（compaction）操作，将多个 segment 合并成一个较大的 segment，随后将旧的 segment 清理掉。由于每个 segment 内部的数据都是有序的，合并过程类似于归并排序。</p>
 <p><a target="_blank" rel="noopener noreferrer" href="https://github.com/parkma99/parkma99.github.io/assets/84610851/31ec315c-f2dc-42c0-9c52-dfa10439c361"><img src="https://github.com/parkma99/parkma99.github.io/assets/84610851/31ec315c-f2dc-42c0-9c52-dfa10439c361" alt="image" style="max-width: 100%;"></a><br>
-在上图的示例中，segment 1 和 2 中都存在 key 为 dog 的数据，这时应该以最新的 segment 为准，因此合并后的值取 84 而不是 52，这实现了类似于字典/HashMap 中“覆盖写”的语义。因此，在新的segment被标记为删除的key， 在新的segment 将不会出现</p>
+在上图的示例中，segment 1 和 2 中都存在 key 为 dog 的数据，这时应该以最新的 segment 为准，因此合并后的值取 84 而不是 52，这实现了类似于字典/HashMap 中“覆盖写”的语义。因此，在新的segment被标记为删除的key， 在新的segment 将不会出现<br>
+至于旧的segment何时被删除，具体要看具体的实现</p>
+<h2>总结</h2>
+<p>LSM tree 存储引擎的工作原理包含以下几个要点：</p>
+<ul>
+<li>写数据时，首先将数据缓存到内存中的一个有序树结构中（称为 memtable）。同时触发相关结构的更新，例如布隆过滤器、稀疏索引。</li>
+<li>当 memtable 积累到足够大时，会一次性写入磁盘中，生成一个内部有序的 segment 文件。该过程为连续写，因此效率极高。</li>
+<li>进行查询时，首先检查布隆过滤器。如果布隆过滤器报告数据不存在，则直接返回不存在。否则，按照从新到老的顺序依次查询每个 segment。</li>
+<li>在查询每个 segment 时，首先使用二分搜索检索对应的稀疏索引，找到数据所在的 offset 范围。然后读取磁盘上该范围内的数据，再次进行二分查找并获得结果。</li>
+<li>对于大量的 segment 文件，定期在后台执行 compaction 操作，将多个文件合并为更大的文件，以保证查询效率不衰减。</li>
+</ul>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>
