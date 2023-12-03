@@ -135,8 +135,98 @@ cmake -DCMAKE_BUILD_TYPE=Release .. <span class="pl-k">&amp;&amp;</span> cmake -
     <span class="pl-k">delete</span> db;
     <span class="pl-k">return</span> <span class="pl-c1">0</span>;
 }</pre></div>
-<h2>详细API</h2>
+<h2>LevelDB API</h2>
 <p>以下的 API 均根据 <a href="https://github.com/google/leveldb/blob/main/doc/index.md">leveldb docs</a> 进行验证</p>
+<p>打开数据库</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">    leveldb::DB *db;
+    leveldb::Options options;
+    options.create_if_missing = <span class="pl-c1">true</span>;
+    leveldb::Status status = leveldb::DB::Open(options, <span class="pl-s"><span class="pl-pds">"</span>testdb<span class="pl-pds">"</span></span>, &amp;db);
+    <span class="pl-en">assert</span>(status.ok());</pre></div>
+<p>关闭数据库</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate"><span class="pl-k">delete</span> db;</pre></div>
+<p>读和写</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">    string key = <span class="pl-s"><span class="pl-pds">"</span>name<span class="pl-pds">"</span></span>;
+    string value = <span class="pl-s"><span class="pl-pds">"</span>shane<span class="pl-pds">"</span></span>;
+    status = db-&gt;<span class="pl-en">Put</span>(leveldb::WriteOptions(), key, value);
+    <span class="pl-en">assert</span>(status.ok());
+    status = db-&gt;<span class="pl-en">Get</span>(leveldb::ReadOptions(), key, &amp;value);
+    <span class="pl-en">assert</span>(status.ok());</pre></div>
+<p>原子更新</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>leveldb/write_batch.h<span class="pl-pds">&gt;</span></span>
+leveldb::Status s = db-&gt;<span class="pl-en">Get</span>(leveldb::ReadOptions(), key, &amp;value);
+    <span class="pl-k">if</span> (s.ok()) {
+        leveldb::WriteBatch batch;
+        batch.<span class="pl-c1">Delete</span>(key);
+        batch.<span class="pl-c1">Put</span>(<span class="pl-s"><span class="pl-pds">"</span>name2<span class="pl-pds">"</span></span>, value);
+        s = db-&gt;<span class="pl-c1">Write</span>(<span class="pl-c1">leveldb::WriteOptions</span>(), &amp;batch);
+    }</pre></div>
+<p>同步写</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">    leveldb::WriteOptions write_options;
+    write_options.sync = <span class="pl-c1">true</span>;
+    db-&gt;<span class="pl-en">Put</span>(write_options, <span class="pl-s"><span class="pl-pds">"</span>key1<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span>value1<span class="pl-pds">"</span></span>);</pre></div>
+<p>并发</p>
+<p>当一个进程打开一个LevelDB数据库时，会获取这个数据库的一个文件锁，其它进程就没法获取这个文件锁了。所以一个LevelDB数据库只支持一个进程同时访问，但是这一个进程里面可以同时有多个线程并发访问。对于leveldb::DB里的很多方法，都是线程安全的，在这些方法内都有加锁的步骤。但是对于其它的一些对象，比如WriteBatch，如果多线程并发访问，需要自己同步。</p>
+<p>迭代</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">    leveldb::Iterator* it = db-&gt;<span class="pl-en">NewIterator</span>(leveldb::ReadOptions());
+    <span class="pl-k">for</span> (it-&gt;<span class="pl-en">SeekToFirst</span>(); it-&gt;<span class="pl-en">Valid</span>(); it-&gt;<span class="pl-en">Next</span>()) {
+        cout &lt;&lt; it-&gt;<span class="pl-c1">key</span>().<span class="pl-c1">ToString</span>() &lt;&lt; <span class="pl-s"><span class="pl-pds">"</span>: <span class="pl-pds">"</span></span>  &lt;&lt; it-&gt;<span class="pl-c1">value</span>().<span class="pl-c1">ToString</span>() &lt;&lt; endl;
+    }
+    <span class="pl-en">assert</span>(it-&gt;<span class="pl-en">status</span>().ok());  <span class="pl-c"><span class="pl-c">//</span> Check for any errors found during the scan</span>
+    <span class="pl-k">delete</span> it;
+<span class="pl-c"><span class="pl-c">//</span> 反向迭代</span>
+<span class="pl-k">for</span> (it-&gt;<span class="pl-en">SeekToLast</span>(); it-&gt;<span class="pl-en">Valid</span>(); it-&gt;<span class="pl-en">Prev</span>()) {
+}</pre></div>
+<p>Snapshots</p>
+<p>LevelDB支持快照功能。快照是一个一致性视图，当创建一个快照时，就给那个时刻的数据库状态打了个快照，以后的更新插入删除在这个快照下是不可见的，注意快照不再使用时，需要马上释放，防止不需要的数据长久被占用，无法清理。、</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">    leveldb::ReadOptions read_options;
+    read_options.snapshot = db-&gt;<span class="pl-en">GetSnapshot</span>();
+    db-&gt;<span class="pl-en">Put</span>(write_options, <span class="pl-s"><span class="pl-pds">"</span>key3<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span>value3<span class="pl-pds">"</span></span>);
+    leveldb::Iterator* iter = db-&gt;<span class="pl-en">NewIterator</span>(read_options);
+    <span class="pl-k">for</span> (iter-&gt;<span class="pl-en">SeekToFirst</span>(); iter-&gt;<span class="pl-en">Valid</span>(); iter-&gt;<span class="pl-en">Next</span>()) {
+        cout &lt;&lt; iter-&gt;<span class="pl-c1">key</span>().<span class="pl-c1">ToString</span>() &lt;&lt; <span class="pl-s"><span class="pl-pds">"</span>: <span class="pl-pds">"</span></span>  &lt;&lt; iter-&gt;<span class="pl-c1">value</span>().<span class="pl-c1">ToString</span>() &lt;&lt; endl;
+    }
+    <span class="pl-k">delete</span> iter;
+    db-&gt;<span class="pl-en">ReleaseSnapshot</span>(read_options.snapshot);</pre></div>
+<p>Slice</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">leveldb::Slice s1 = <span class="pl-s"><span class="pl-pds">"</span>hello<span class="pl-pds">"</span></span>;
+
+std::string <span class="pl-en">str</span>(<span class="pl-s"><span class="pl-pds">"</span>world<span class="pl-pds">"</span></span>);
+leveldb::Slice s2 = str;
+
+std::string str = s1.ToString();
+<span class="pl-en">assert</span>(str == std::string(<span class="pl-s"><span class="pl-pds">"</span>hello<span class="pl-pds">"</span></span>));</pre></div>
+<p>Be careful when using Slices since it is up to the caller to ensure that the external byte array into which the Slice points remains live while the Slice is in use. For example, the following is buggy:</p>
+<p>变量的生命周期问题</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">leveldb::Slice slice;
+<span class="pl-k">if</span> (...) {
+  std::string str = ...;
+  slice = str;
+}
+<span class="pl-en">Use</span>(slice);</pre></div>
+<p>比较器</p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>leveldb/comparator.h<span class="pl-pds">&gt;</span></span>
+<span class="pl-k">class</span> <span class="pl-en">TwoPartComparator</span> : <span class="pl-k">public</span> <span class="pl-en">Comparator</span> {
+<span class="pl-k">public:</span>
+    [[nodiscard]] <span class="pl-k">int</span> <span class="pl-en">Compare</span>(<span class="pl-k">const</span> leveldb::Slice&amp; a, <span class="pl-k">const</span> leveldb::Slice&amp; b) <span class="pl-k">const</span> <span class="pl-k">override</span> {
+        <span class="pl-k">if</span> ( a.<span class="pl-c1">size</span>() == b.<span class="pl-c1">size</span>()) <span class="pl-k">return</span> <span class="pl-c1">0</span>;
+        <span class="pl-k">if</span> (a.<span class="pl-c1">size</span>() &gt; b.<span class="pl-c1">size</span>()) <span class="pl-k">return</span> <span class="pl-c1">1</span>;
+        <span class="pl-k">return</span> -<span class="pl-c1">1</span>;
+    }
+
+    <span class="pl-c"><span class="pl-c">//</span> Ignore the following methods for now:</span>
+    [[nodiscard]] <span class="pl-k">const</span> <span class="pl-k">char</span>* <span class="pl-en">Name</span>() <span class="pl-k">const</span> <span class="pl-k">override</span> { <span class="pl-k">return</span> <span class="pl-s"><span class="pl-pds">"</span>TwoPartComparator<span class="pl-pds">"</span></span>; }
+    <span class="pl-k">void</span> <span class="pl-en">FindShortestSeparator</span>(std::string*, <span class="pl-k">const</span> leveldb::Slice&amp;) <span class="pl-k">const</span> <span class="pl-k">override</span> {}
+    <span class="pl-k">void</span> <span class="pl-en">FindShortSuccessor</span>(std::string*) <span class="pl-k">const</span> <span class="pl-k">override</span> {}
+};
+TwoPartComparator cmp;
+    leveldb::DB* db;
+    leveldb::Options options;
+    options.create_if_missing = <span class="pl-c1">true</span>;
+    options.comparator = &amp;cmp;
+    leveldb::Status status = leveldb::DB::Open(options, <span class="pl-s"><span class="pl-pds">"</span>/tmp/testdb<span class="pl-pds">"</span></span>, &amp;db);
+    <span class="pl-en">assert</span>(status.ok());</pre></div>
+<p>在我的开发环境下需要添加 <code class="notranslate">-fno-rtti</code> 编译参数，不然出现ld错误</p>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>
