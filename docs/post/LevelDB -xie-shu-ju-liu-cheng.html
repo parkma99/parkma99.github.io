@@ -80,6 +80,96 @@ body{box-sizing: border-box;min-width: 200px;max-width: 900px;margin: 20px auto;
     <span class="pl-ent">F</span> <span class="pl-k">--&gt;</span> <span class="pl-ent">G</span><span class="pl-s"><span class="pl-pds"><span class="pl-sg">[</span></span>MemTable::Add<span class="pl-pds"><span class="pl-sg">]</span></span></span>
     <span class="pl-ent">G</span> <span class="pl-k">--&gt;</span> <span class="pl-ent">H</span><span class="pl-s"><span class="pl-pds"><span class="pl-sg">(</span></span>SkipList&lt;Key, Comparator&gt;::Insert<span class="pl-pds"><span class="pl-sg">)</span></span></span></pre></div>
 <h4>具体代码分析</h4>
+<ul>
+<li>DBImpl::Put</li>
+</ul>
+<p>直接调用 <code class="notranslate">DB::Put</code></p>
+<div class="highlight highlight-source-c++"><pre class="notranslate">Status <span class="pl-en">DBImpl::Put</span>(<span class="pl-k">const</span> WriteOptions&amp; o, <span class="pl-k">const</span> Slice&amp; key, <span class="pl-k">const</span> Slice&amp; val) {
+  <span class="pl-k">return</span> <span class="pl-c1">DB::Put</span>(o, key, val);
+}</pre></div>
+<ul>
+<li>DB::Put</li>
+</ul>
+<div class="highlight highlight-source-c++"><pre class="notranslate">Status <span class="pl-en">DB::Put</span>(<span class="pl-k">const</span> WriteOptions&amp; opt, <span class="pl-k">const</span> Slice&amp; key, <span class="pl-k">const</span> Slice&amp; value) {
+  WriteBatch batch;
+  batch.<span class="pl-c1">Put</span>(key, value); <span class="pl-c"><span class="pl-c">//</span> 把key value 放入到 WriteBatch 中，具体是把key value 编码为字符串存入writebatch的内部成员中</span>
+  <span class="pl-k">return</span> <span class="pl-c1">Write</span>(opt, &amp;batch);
+}</pre></div>
+<ul>
+<li>DBImpl::Write</li>
+</ul>
+<div class="highlight highlight-source-c++"><pre class="notranslate">Status <span class="pl-en">DBImpl::Write</span>(<span class="pl-k">const</span> WriteOptions&amp; options, WriteBatch* updates) {
+  Writer <span class="pl-smi">w</span>(&amp;mutex_);
+  w.<span class="pl-smi">batch</span> = updates;
+  w.<span class="pl-smi">sync</span> = options.<span class="pl-smi">sync</span>;
+  w.<span class="pl-smi">done</span> = <span class="pl-c1">false</span>;
+
+  MutexLock <span class="pl-smi">l</span>(&amp;mutex_);
+  writers_.<span class="pl-c1">push_back</span>(&amp;w);
+  <span class="pl-k">while</span> (!w.<span class="pl-smi">done</span> &amp;&amp; &amp;w != writers_.<span class="pl-c1">front</span>()) {
+    w.<span class="pl-smi">cv</span>.<span class="pl-c1">Wait</span>();
+  }
+  <span class="pl-k">if</span> (w.<span class="pl-smi">done</span>) {
+    <span class="pl-k">return</span> w.<span class="pl-smi">status</span>;
+  }
+
+  <span class="pl-c"><span class="pl-c">//</span> May temporarily unlock and wait.</span>
+  Status status = <span class="pl-c1">MakeRoomForWrite</span>(updates == <span class="pl-c1">nullptr</span>);
+  <span class="pl-c1">uint64_t</span> last_sequence = versions_-&gt;<span class="pl-c1">LastSequence</span>();
+  Writer* last_writer = &amp;w;
+  <span class="pl-k">if</span> (status.<span class="pl-c1">ok</span>() &amp;&amp; updates != <span class="pl-c1">nullptr</span>) {  <span class="pl-c"><span class="pl-c">//</span> nullptr batch is for compactions</span>
+    WriteBatch* write_batch = <span class="pl-c1">BuildBatchGroup</span>(&amp;last_writer);
+    <span class="pl-c1">WriteBatchInternal::SetSequence</span>(write_batch, last_sequence + <span class="pl-c1">1</span>);
+    last_sequence += <span class="pl-c1">WriteBatchInternal::Count</span>(write_batch);
+
+    <span class="pl-c"><span class="pl-c">//</span> Add to log and apply to memtable.  We can release the lock</span>
+    <span class="pl-c"><span class="pl-c">//</span> during this phase since &amp;w is currently responsible for logging</span>
+    <span class="pl-c"><span class="pl-c">//</span> and protects against concurrent loggers and concurrent writes</span>
+    <span class="pl-c"><span class="pl-c">//</span> into mem_.</span>
+    {
+      mutex_.<span class="pl-c1">Unlock</span>();
+      status = log_-&gt;<span class="pl-c1">AddRecord</span>(<span class="pl-c1">WriteBatchInternal::Contents</span>(write_batch));
+      <span class="pl-k">bool</span> sync_error = <span class="pl-c1">false</span>;
+      <span class="pl-k">if</span> (status.<span class="pl-c1">ok</span>() &amp;&amp; options.<span class="pl-smi">sync</span>) {
+        status = logfile_-&gt;<span class="pl-c1">Sync</span>();
+        <span class="pl-k">if</span> (!status.<span class="pl-c1">ok</span>()) {
+          sync_error = <span class="pl-c1">true</span>;
+        }
+      }
+      <span class="pl-k">if</span> (status.<span class="pl-c1">ok</span>()) {
+        status = <span class="pl-c1">WriteBatchInternal::InsertInto</span>(write_batch, mem_);
+      }
+      mutex_.<span class="pl-c1">Lock</span>();
+      <span class="pl-k">if</span> (sync_error) {
+        <span class="pl-c"><span class="pl-c">//</span> The state of the log file is indeterminate: the log record we</span>
+        <span class="pl-c"><span class="pl-c">//</span> just added may or may not show up when the DB is re-opened.</span>
+        <span class="pl-c"><span class="pl-c">//</span> So we force the DB into a mode where all future writes fail.</span>
+        <span class="pl-c1">RecordBackgroundError</span>(status);
+      }
+    }
+    <span class="pl-k">if</span> (write_batch == tmp_batch_) tmp_batch_-&gt;<span class="pl-c1">Clear</span>();
+
+    versions_-&gt;<span class="pl-c1">SetLastSequence</span>(last_sequence);
+  }
+
+  <span class="pl-k">while</span> (<span class="pl-c1">true</span>) {
+    Writer* ready = writers_.<span class="pl-c1">front</span>();
+    writers_.<span class="pl-c1">pop_front</span>();
+    <span class="pl-k">if</span> (ready != &amp;w) {
+      ready-&gt;<span class="pl-smi">status</span> = status;
+      ready-&gt;<span class="pl-smi">done</span> = <span class="pl-c1">true</span>;
+      ready-&gt;<span class="pl-smi">cv</span>.<span class="pl-c1">Signal</span>();
+    }
+    <span class="pl-k">if</span> (ready == last_writer) <span class="pl-k">break</span>;
+  }
+
+  <span class="pl-c"><span class="pl-c">//</span> Notify new head of write queue</span>
+  <span class="pl-k">if</span> (!writers_.<span class="pl-c1">empty</span>()) {
+    writers_.<span class="pl-c1">front</span>()-&gt;<span class="pl-smi">cv</span>.<span class="pl-c1">Signal</span>();
+  }
+
+  <span class="pl-k">return</span> status;
+}</pre></div>
 </div>
 <button class="btn btn-block" type="button" onclick="openComments()" id="cmButton">评论</button>
 <div class="comments" id="comments"></div>
