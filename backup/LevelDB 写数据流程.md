@@ -68,6 +68,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
+// 先写入日志
       status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
       bool sync_error = false;
       if (status.ok() && options.sync) {
@@ -77,6 +78,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         }
       }
       if (status.ok()) {
+// 后写入到mem_
         status = WriteBatchInternal::InsertInto(write_batch, mem_);
       }
       mutex_.Lock();
